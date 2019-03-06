@@ -17,6 +17,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"regexp"
 	"sort"
 	"time"
 )
@@ -78,6 +79,8 @@ type Bridge struct {
 	prometheusSkipServerCertCheck bool
 	additionalDimensions          map[string]string
 	replaceDimensions             map[string]string
+	publishOriginalDimensions     bool
+	metricNameWhitelistRegex      string
 }
 
 // NewBridge initializes and returns a pointer to a Bridge using the
@@ -100,6 +103,8 @@ func NewBridge(c *Config) (*Bridge, error) {
 	b.prometheusSkipServerCertCheck = c.PrometheusSkipServerCertCheck
 	b.additionalDimensions = c.AdditionalDimensions
 	b.replaceDimensions = c.ReplaceDimensions
+	b.publishOriginalDimensions = false
+	b.metricNameWhitelistRegex = "^([a-z,_]*)(kube_node_status_condition|kube_endpoint_address_available|kube_pod_container_status_terminated_reason|kube_pod_container_status_waiting_reason|kube_pod_status_ready)([a-z,_]*)$"
 
 	if c.CloudWatchPublishInterval > 0 {
 		b.cloudWatchPublishInterval = c.CloudWatchPublishInterval
@@ -184,13 +189,16 @@ func (b *Bridge) publishMetricsToCloudWatch(mfs []*dto.MetricFamily) error {
 
 	for _, s := range vec {
 		name := getName(s.Metric)
-		data = appendDatum(data, name, s, b)
+		whitelistPattern, _ := regexp.Compile(b.metricNameWhitelistRegex)
+		if whitelistPattern.MatchString(name) {
+			data = appendDatum(data, name, s, b)
 
-		if len(data) == batchSize {
-			if err := b.flush(data); err != nil {
-				log.Println("prometheus-to-cloudwatch: error publishing to CloudWatch:", err)
+			if len(data) == batchSize {
+				if err := b.flush(data); err != nil {
+					log.Println("prometheus-to-cloudwatch: error publishing to CloudWatch:", err)
+				}
+				data = make([]*cloudwatch.MetricDatum, 0, batchSize)
 			}
-			data = make([]*cloudwatch.MetricDatum, 0, batchSize)
 		}
 	}
 
@@ -219,13 +227,15 @@ func appendDatum(data []*cloudwatch.MetricDatum, name string, s *model.Sample, b
 	datum := &cloudwatch.MetricDatum{}
 
 	kubeStateDimensions, replacedDimensions := getDimensions(metric, 10-len(b.additionalDimensions), b)
-	datum.SetMetricName(name).
-		SetValue(float64(s.Value)).
-		SetTimestamp(s.Timestamp.Time()).
-		SetDimensions(append(kubeStateDimensions, getAdditionalDimensions(b)...)).
-		SetStorageResolution(getResolution(metric)).
-		SetUnit(getUnit(metric))
-	data = append(data, datum)
+	if replacedDimensions == nil && len(replacedDimensions) == 0 {
+		datum.SetMetricName(name).
+			SetValue(float64(s.Value)).
+			SetTimestamp(s.Timestamp.Time()).
+			SetDimensions(append(kubeStateDimensions, getAdditionalDimensions(b)...)).
+			SetStorageResolution(getResolution(metric)).
+			SetUnit(getUnit(metric))
+		data = append(data, datum)
+	}
 
 	// Don't add replacement if not configured
 	if replacedDimensions != nil && len(replacedDimensions) > 0 {
