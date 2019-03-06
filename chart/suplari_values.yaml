@@ -1,0 +1,34 @@
+# Default values for prometheus-to-cloudwatch. Update them per your requirements
+#
+replicaCount: 1
+
+env:
+  CLOUDWATCH_NAMESPACE: "kube-state-metrics"
+  CLOUDWATCH_REGION: "us-west-2"
+  CLOUDWATCH_PUBLISH_TIMEOUT: "5"
+  PROMETHEUS_SCRAPE_INTERVAL: "20"
+  PROMETHEUS_SCRAPE_URL: "http://kube-state-metrics:8080/metrics"
+  CERT_PATH: ""
+  KEY_PATH: ""
+  ACCEPT_INVALID_CERT: "true"
+  REPLACE_DIMENSIONS: "node=All,pod=All"
+
+image:
+  repository: "235895476583.dkr.ecr.us-west-2.amazonaws.com/prometheus-to-cloudwatch"
+  tag: "latest"
+  pullPolicy: "Always"
+
+annotations: {
+  iam.amazonaws.com/role: insights-controller-role
+}
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+volume:
+  emptyDir: {}
