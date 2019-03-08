@@ -355,7 +355,7 @@ func fetchMetricFamilies(
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: skipServerCertCheck},
 		}
 	}
-	client := &http.Client{Transport: transport}
+	client := &http.Client{Transport: transport, Timeout: time.Second * 15}
 	decodeContent(client, url, ch)
 }
 
