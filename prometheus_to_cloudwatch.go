@@ -79,8 +79,8 @@ type Bridge struct {
 	prometheusSkipServerCertCheck bool
 	additionalDimensions          map[string]string
 	replaceDimensions             map[string]string
-	publishOriginalDimensions     bool
 	metricNameWhitelistRegex      string
+	replaceDimensionsRegex        map[string]map[string]string
 }
 
 // NewBridge initializes and returns a pointer to a Bridge using the
@@ -103,8 +103,13 @@ func NewBridge(c *Config) (*Bridge, error) {
 	b.prometheusSkipServerCertCheck = c.PrometheusSkipServerCertCheck
 	b.additionalDimensions = c.AdditionalDimensions
 	b.replaceDimensions = c.ReplaceDimensions
-	b.publishOriginalDimensions = false
 	b.metricNameWhitelistRegex = "^([a-z,_]*)(kube_node_status_condition|kube_endpoint_address_available|kube_pod_container_status_terminated_reason|kube_pod_container_status_waiting_reason|kube_pod_status_ready)([a-z,_]*)$"
+	b.replaceDimensionsRegex = make(map[string]map[string]string)
+	replaceEndpointRegex := make(map[string]string)
+	replaceEndpointRegex["^(insight-engine-service-)([a-z,0-9,_]*)$"] = "insight-engine-service"
+	replaceEndpointRegex["^(notebook-insight-engine-service-)([a-z,0-9,_]*)$"] = "notebook-insight-engine-service"
+	b.replaceDimensionsRegex["endpoint"] = replaceEndpointRegex
+	b.replaceDimensionsRegex["service"] = replaceEndpointRegex
 
 	if c.CloudWatchPublishInterval > 0 {
 		b.cloudWatchPublishInterval = c.CloudWatchPublishInterval
@@ -227,6 +232,8 @@ func appendDatum(data []*cloudwatch.MetricDatum, name string, s *model.Sample, b
 	datum := &cloudwatch.MetricDatum{}
 
 	kubeStateDimensions, replacedDimensions := getDimensions(metric, 10-len(b.additionalDimensions), b)
+
+	// Original dimension is not published if replacement dimension is found
 	if replacedDimensions == nil && len(replacedDimensions) == 0 {
 		datum.SetMetricName(name).
 			SetValue(float64(s.Value)).
@@ -284,13 +291,30 @@ func getDimensions(m model.Metric, num int, b *Bridge) ([]*cloudwatch.Dimension,
 			val := string(m[model.LabelName(name)])
 			if val != "" {
 				dims = append(dims, new(cloudwatch.Dimension).SetName(name).SetValue(val))
+
+				wasReplaced := false
 				// Don't add replacement if not configured
 				if b.replaceDimensions != nil && len(b.replaceDimensions) > 0 {
 					if replacement, ok := b.replaceDimensions[name]; ok {
 						replacedDims = append(replacedDims, new(cloudwatch.Dimension).SetName(name).SetValue(replacement))
-					} else {
-						replacedDims = append(replacedDims, new(cloudwatch.Dimension).SetName(name).SetValue(val))
+						wasReplaced = true
+					} else if b.replaceDimensionsRegex != nil && len(b.replaceDimensionsRegex) > 0 {
+						if expr, ok := b.replaceDimensionsRegex[name]; ok {
+							for k, v := range expr {
+								if matchPattern, err := regexp.Compile(k); err == nil {
+									if matchPattern.MatchString(val) {
+										replacedDims = append(replacedDims, new(cloudwatch.Dimension).SetName(name).SetValue(v))
+										wasReplaced = true
+									}
+								} else {
+									log.Println(fmt.Sprintf("prometheus-to-cloudwatch: Error when compiling regex %s. Err %v", k, err))
+								}
+							}
+						}
 					}
+				}
+				if !wasReplaced {
+					replacedDims = append(replacedDims, new(cloudwatch.Dimension).SetName(name).SetValue(val))
 				}
 			}
 		}
