@@ -13,6 +13,7 @@ env:
   ACCEPT_INVALID_CERT: "true"
   REPLACE_DIMENSIONS: "node=All,pod=All"
 
+
 image:
   repository: "235895476583.dkr.ecr.us-west-2.amazonaws.com/prometheus-to-cloudwatch"
   tag: "latest"

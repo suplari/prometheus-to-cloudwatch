@@ -66,6 +66,12 @@ type Config struct {
 
 	// Replace dimensions with the provided label. This allows for aggregating metrics across dimensions so we can set CloudWatch Alarms on the metrics
 	ReplaceDimensions map[string]string
+
+	// Only send the metrics that match following white list regex
+	MetricNameWhitelistRegex string
+
+	// Replace the dimensions for metrics with the provided replacement values. Useful for merging multiple dimension values into one
+	ReplaceDimensionsRegex map[string]map[string]string
 }
 
 // Bridge pushes metrics to AWS CloudWatch
@@ -103,7 +109,8 @@ func NewBridge(c *Config) (*Bridge, error) {
 	b.prometheusSkipServerCertCheck = c.PrometheusSkipServerCertCheck
 	b.additionalDimensions = c.AdditionalDimensions
 	b.replaceDimensions = c.ReplaceDimensions
-	b.metricNameWhitelistRegex = "^([a-z,_]*)(kube_node_status_condition|kube_endpoint_address_available|kube_pod_container_status_terminated_reason|kube_pod_container_status_waiting_reason|kube_pod_status_ready)([a-z,_]*)$"
+	b.metricNameWhitelistRegex = c.MetricNameWhitelistRegex
+	//b.metricNameWhitelistRegex = "^([a-z,_]*)(kube_node_status_condition|kube_endpoint_address_available|kube_pod_container_status_terminated_reason|kube_pod_container_status_waiting_reason|kube_pod_status_ready)([a-z,_]*)$"
 	b.replaceDimensionsRegex = make(map[string]map[string]string)
 	replaceEndpointRegex := make(map[string]string)
 	replaceEndpointRegex["^(insight-engine-service-)([a-z,0-9,_]*)$"] = "insight-engine-service"

@@ -24,6 +24,8 @@ var (
 	skipServerCertCheck      = flag.String("accept_invalid_cert", os.Getenv("ACCEPT_INVALID_CERT"), "Accept any certificate during TLS handshake. Insecure, use only for testing")
 	additionalDimension      = flag.String("additional_dimension", os.Getenv("ADDITIONAL_DIMENSION"), "Additional dimension specified by NAME=VALUE")
 	replaceDimensions        = flag.String("replace_dimensions", os.Getenv("REPLACE_DIMENSIONS"), "replace dimensions specified by NAME=VALUE,...")
+	metricNameWhitelistRegex = flag.String("metric_name_whitelist_regex", os.Getenv("METRIC_NAME_WHITELIST_REGEX"), "Only send the metrics that match following white list regex")
+	replaceDimensionsRegex   = flag.String("replace_dimensions_regex", os.Getenv("REPLACE_DIMENSIONS_REGEX"), "Replace the dimensions for metrics with the provided replacement values. Useful for merging multiple dimension values into one")
 )
 
 func main() {
@@ -78,6 +80,32 @@ func main() {
 		}
 	}
 
+	var replaceDimsRegex = map[string]string{}
+	if *replaceDimensionsRegex != "" {
+		r := strings.Replace(*replaceDimensionsRegex, "[", "", -1)
+		r = strings.Replace(r, "]", "", -1)
+		kvs := strings.Split(r, ";")
+		if len(kvs) > 0 {
+			for _, rd := range kvs {
+				kv := strings.SplitN(rd, "=", 2)
+				d := ""
+				v := kv
+				for i, rd1 := range kv {
+					if i == 0 {
+						d = rd1
+					} else {
+						// READ THIS SHIT FROM YAML
+					}
+					if len(kv) != 2 {
+						log.Fatal("prometheus-to-cloudwatch: Error: -replaceDimensionsRegex must be formated as KEY1=[X=Y,A=B];KEY2=[C=D];...")
+					}
+					replaceDimsRegex[kv[0]] = kv[1]
+				}
+			}
+			kvs1 := strings.Split(kvs, ";")
+		}
+	}
+
 	config := &Config{
 		CloudWatchNamespace:           *cloudWatchNamespace,
 		CloudWatchRegion:              *cloudWatchRegion,
@@ -89,6 +117,7 @@ func main() {
 		AwsSecretAccessKey:            *awsSecretAccessKey,
 		AdditionalDimensions:          additionalDimensions,
 		ReplaceDimensions:             replaceDims,
+		MetricNameWhitelistRegex:      *metricNameWhitelistRegex,
 	}
 
 	if *prometheusScrapeInterval != "" {
