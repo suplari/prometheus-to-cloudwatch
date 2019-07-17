@@ -108,6 +108,8 @@ func NewBridge(c *Config) (*Bridge, error) {
 	replaceEndpointRegex := make(map[string]string)
 	replaceEndpointRegex["^(insight-engine-service-)([a-z,0-9,_]*)$"] = "insight-engine-service"
 	replaceEndpointRegex["^(notebook-insight-engine-service-)([a-z,0-9,_]*)$"] = "notebook-insight-engine-service"
+	replaceEndpointRegex["^(ingress-insight-engine-)([a-z,0-9,_]*)$"] = "insight-engine-service"
+	replaceEndpointRegex["^(ingress-insight-notebook-)([a-z,0-9,_]*)$"] = "notebook-insight-engine-service"
 	b.replaceDimensionsRegex["endpoint"] = replaceEndpointRegex
 	b.replaceDimensionsRegex["service"] = replaceEndpointRegex
 
