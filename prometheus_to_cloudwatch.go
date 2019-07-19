@@ -110,6 +110,7 @@ func NewBridge(c *Config) (*Bridge, error) {
 	replaceEndpointRegex["^(notebook-insight-engine-service-)([a-z,0-9,_]*)$"] = "notebook-insight-engine-service"
 	replaceEndpointRegex["^(ingress-insight-engine-)([a-z,0-9,_]*)$"] = "insight-engine-service"
 	replaceEndpointRegex["^(ingress-insight-notebook-)([a-z,0-9,_]*)$"] = "notebook-insight-engine-service"
+	replaceEndpointRegex["^(insight-engine-)([a-z,0-9,_]*)$"] = "insight-engine-service"
 	b.replaceDimensionsRegex["endpoint"] = replaceEndpointRegex
 	b.replaceDimensionsRegex["service"] = replaceEndpointRegex
 
@@ -199,7 +200,6 @@ func (b *Bridge) publishMetricsToCloudWatch(mfs []*dto.MetricFamily) error {
 		whitelistPattern, _ := regexp.Compile(b.metricNameWhitelistRegex)
 		if whitelistPattern.MatchString(name) {
 			data = appendDatum(data, name, s, b)
-
 			if len(data) == batchSize {
 				if err := b.flush(data); err != nil {
 					log.Println("prometheus-to-cloudwatch: error publishing to CloudWatch:", err)
@@ -303,8 +303,10 @@ func getDimensions(m model.Metric, num int, b *Bridge) ([]*cloudwatch.Dimension,
 					} else if b.replaceDimensionsRegex != nil && len(b.replaceDimensionsRegex) > 0 {
 						if expr, ok := b.replaceDimensionsRegex[name]; ok {
 							for k, v := range expr {
+								// TODO pre-compile the regex
 								if matchPattern, err := regexp.Compile(k); err == nil {
 									if matchPattern.MatchString(val) {
+										//log.Println(fmt.Sprintf("prometheus-to-cloudwatch: Replacing dimensions. Name %s, original value %s, new values %s, replaceDimensionsRegex key %s", name, val, v, k))
 										replacedDims = append(replacedDims, new(cloudwatch.Dimension).SetName(name).SetValue(v))
 										wasReplaced = true
 									}
